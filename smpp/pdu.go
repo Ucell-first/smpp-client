@@ -119,3 +119,26 @@ func (s *SubmitSM) MarshalBinary() ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
+
+// Unbind PDU struktura
+type Unbind struct {
+	Header
+}
+
+func NewUnbind(seq uint32) *Unbind {
+	return &Unbind{
+		Header: Header{
+			CommandID:      0x00000006,
+			SequenceNumber: seq,
+		},
+	}
+}
+
+func (u *Unbind) MarshalBinary() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.BigEndian, u.CommandLength)
+	binary.Write(buf, binary.BigEndian, u.CommandID)
+	binary.Write(buf, binary.BigEndian, u.CommandStatus)
+	binary.Write(buf, binary.BigEndian, u.SequenceNumber)
+	return buf.Bytes(), nil
+}

@@ -122,10 +122,38 @@ func (c *Client) SendSMS(src, dest, text string) error {
 	retryBackoff.MaxElapsedTime = 2 * time.Minute
 	return backoff.Retry(operation, retryBackoff)
 }
+func (c *Client) nextSequence() uint32 {
+	c.sequence++
+	return c.sequence
+}
 
 func (c *Client) Close() error {
-	unbindPDU := NewUnbind()
-	data, _ := unbindPDU.MarshalBinary()
-	_, _ = c.conn.Write(data)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Unbind PDU yaratish
+	unbind := NewUnbind(c.nextSequence())
+	unbind.SequenceNumber = c.sequence
+	c.sequence++
+
+	data, err := unbind.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	// Unbind jo'natish
+	if _, err := c.conn.Write(data); err != nil {
+		return err
+	}
+
+	// Javobni kutish (optionally)
+	resp := make([]byte, 16)
+	if _, err := c.conn.Read(resp); err == nil {
+		status := binary.BigEndian.Uint32(resp[8:12])
+		if status != 0 {
+			return fmt.Errorf("unbind failed with status: %d", status)
+		}
+	}
+
 	return c.conn.Close()
 }

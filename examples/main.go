@@ -3,8 +3,8 @@ package main
 import (
 	"crypto/tls"
 	"fmt"
-	"github.com/nurmuhammad701/Ucell-first/smpp-client/smpp"
 	"log"
+	"smpp-client/smpp"
 )
 
 func main() {

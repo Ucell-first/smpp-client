@@ -26,98 +26,82 @@ type BindTransmitter struct {
 }
 
 func (b *BindTransmitter) MarshalBinary() ([]byte, error) {
-	systemID := append([]byte(b.SystemID), 0)
-	password := append([]byte(b.Password), 0)
-	systemType := append([]byte(b.SystemType), 0)
-	addressRange := append([]byte(b.AddressRange), 0)
+	var buf bytes.Buffer
 
-	data := make([]byte, 16)
-	binary.BigEndian.PutUint32(data[4:8], b.CommandID)
-	binary.BigEndian.PutUint32(data[8:12], b.CommandStatus)
-	binary.BigEndian.PutUint32(data[12:16], b.SequenceNumber)
+	// Header (avvaliga CommandLength joy tashlab qo'yamiz)
+	buf.Write(make([]byte, 4)) // CommandLength uchun joy
+	binary.Write(&buf, binary.BigEndian, b.CommandID)
+	binary.Write(&buf, binary.BigEndian, b.CommandStatus)
+	binary.Write(&buf, binary.BigEndian, b.SequenceNumber)
 
-	data = append(data, systemID...)
-	data = append(data, password...)
-	data = append(data, systemType...)
-	data = append(data, b.InterfaceVersion)
-	data = append(data, b.AddrTon)
-	data = append(data, b.AddrNpi)
-	data = append(data, addressRange...)
+	// Body
+	writeCString(&buf, b.SystemID)
+	writeCString(&buf, b.Password)
+	writeCString(&buf, b.SystemType)
+	buf.WriteByte(b.InterfaceVersion)
+	buf.WriteByte(b.AddrTon)
+	buf.WriteByte(b.AddrNpi)
+	writeCString(&buf, b.AddressRange)
 
+	// CommandLength ni hisoblash
+	data := buf.Bytes()
 	binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+
 	return data, nil
+}
+
+func writeCString(buf *bytes.Buffer, s string) {
+	buf.WriteString(s)
+	buf.WriteByte(0)
 }
 
 // pdu.go fayliga qo'shing
 type SubmitSM struct {
 	Header
-	ServiceType          string
-	SourceAddrTon        uint8
-	SourceAddrNpi        uint8
-	SourceAddr           string
-	DestAddrTon          uint8
-	DestAddrNpi          uint8
-	DestinationAddr      string
-	ProtocolID           uint8
-	PriorityFlag         uint8
-	ScheduleDeliveryTime string
-	ValidityPeriod       string
-	RegisteredDelivery   uint8
-	DataCoding           uint8
-	ShortMessage         []byte
+	ServiceType     string
+	SourceAddrTon   uint8
+	SourceAddrNpi   uint8
+	SourceAddr      string
+	DestAddrTon     uint8
+	DestAddrNpi     uint8
+	DestinationAddr string
+	DataCoding      uint8
+	ShortMessage    []byte
 }
 
 func (s *SubmitSM) MarshalBinary() ([]byte, error) {
-	// SubmitSM uchun marshal logikasi
-	buf := new(bytes.Buffer)
+	var buf bytes.Buffer
 
-	// ServiceType (1 octet + NULL)
-	buf.WriteString(s.ServiceType)
-	buf.WriteByte(0)
+	// Header (CommandLength keyin yoziladi)
+	buf.Write(make([]byte, 4))
+	binary.Write(&buf, binary.BigEndian, s.CommandID)
+	binary.Write(&buf, binary.BigEndian, s.CommandStatus)
+	binary.Write(&buf, binary.BigEndian, s.SequenceNumber)
 
-	// Source Address TON/NPI
+	// Body
+	writeCString(&buf, s.ServiceType)
 	buf.WriteByte(s.SourceAddrTon)
 	buf.WriteByte(s.SourceAddrNpi)
-
-	// Source Address
-	buf.WriteString(s.SourceAddr)
-	buf.WriteByte(0)
-
-	// Destination Address TON/NPI
+	writeCString(&buf, s.SourceAddr)
 	buf.WriteByte(s.DestAddrTon)
 	buf.WriteByte(s.DestAddrNpi)
-
-	// Destination Address
-	buf.WriteString(s.DestinationAddr)
-	buf.WriteByte(0)
-
-	// Protocol ID
-	buf.WriteByte(s.ProtocolID)
-
-	// Priority Flag
-	buf.WriteByte(s.PriorityFlag)
-
-	// Schedule Delivery Time
-	buf.WriteString(s.ScheduleDeliveryTime)
-	buf.WriteByte(0)
-
-	// Validity Period
-	buf.WriteString(s.ValidityPeriod)
-	buf.WriteByte(0)
-
-	// Registered Delivery
-	buf.WriteByte(s.RegisteredDelivery)
-
-	// Data Coding
+	writeCString(&buf, s.DestinationAddr)
+	buf.WriteByte(0)       // ProtocolID
+	buf.WriteByte(0)       // PriorityFlag
+	writeCString(&buf, "") // ScheduleDeliveryTime
+	writeCString(&buf, "") // ValidityPeriod
+	buf.WriteByte(0)       // RegisteredDelivery
+	buf.WriteByte(0)       // ReplaceIfPresentFlag
 	buf.WriteByte(s.DataCoding)
-
-	// Message Length
-	buf.WriteByte(byte(len(s.ShortMessage)))
-
-	// Message Content
+	buf.WriteByte(0) // SMDefaultMsgID
+	buf.WriteByte(uint8(len(s.ShortMessage)))
 	buf.Write(s.ShortMessage)
 
-	return buf.Bytes(), nil
+	// CommandLength ni hisoblash
+	data := buf.Bytes()
+	binary.BigEndian.PutUint32(data[0:4], uint32(len(data)))
+
+	return data, nil
 }
 
 // Unbind PDU struktura
@@ -128,7 +112,9 @@ type Unbind struct {
 func NewUnbind(seq uint32) *Unbind {
 	return &Unbind{
 		Header: Header{
+			CommandLength:  16, // Faqat header uchun
 			CommandID:      0x00000006,
+			CommandStatus:  0,
 			SequenceNumber: seq,
 		},
 	}

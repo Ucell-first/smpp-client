@@ -131,27 +131,23 @@ func (c *Client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Unbind PDU yaratish
 	unbind := NewUnbind(c.nextSequence())
-	unbind.SequenceNumber = c.sequence
-	c.sequence++
-
 	data, err := unbind.MarshalBinary()
 	if err != nil {
 		return err
 	}
 
-	// Unbind jo'natish
 	if _, err := c.conn.Write(data); err != nil {
 		return err
 	}
 
-	// Javobni kutish (optionally)
+	// Javobni kutish (30 soniya)
+	c.conn.SetReadDeadline(time.Now().Add(30 * time.Second))
 	resp := make([]byte, 16)
 	if _, err := c.conn.Read(resp); err == nil {
 		status := binary.BigEndian.Uint32(resp[8:12])
 		if status != 0 {
-			return fmt.Errorf("unbind failed with status: %d", status)
+			return fmt.Errorf("unbind failed: status=%d", status)
 		}
 	}
 
